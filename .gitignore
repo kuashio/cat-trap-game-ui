@@ -1,0 +1,23 @@
+# Node modules
+node_modules/
+
+# Build output
+dist/
+out/
+
+# TypeScript compiled files
+src/**/*.js
+src/**/*.js.map
+
+# VSCode settings
+.vscode-test.mjs
+.vscode-test/
+
+# Logs
+*.log
+
+# Package files
+*.vsix
+
+# Quickstart guide
+vsc-extension-quickstart.md
