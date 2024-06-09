@@ -58,12 +58,12 @@ function getWebviewContent() {
         }
         #hexgrid {
             width: 100%;
-            height: 500px;  /* Increase height to ensure all hexagons are visible */
             background-color: lightgrey;
             display: flex;
             justify-content: center;
             align-items: center;
             margin-bottom: 20px;
+            overflow: hidden; /* Ensure content doesn't overflow */
         }
         .control {
             margin-bottom: 10px;
@@ -134,12 +134,12 @@ function getWebviewContent() {
             const hexHeight = 2 * hexSize;
             const verticalSpacing = hexHeight * 0.75;
             const horizontalSpacing = hexWidth;
-            const offsetX = hexWidth / 2;
-            const offsetY = hexHeight / 2;
+            const offsetX = hexWidth / 2 + 5;  // Shift right by 5 pixels
+            const offsetY = hexHeight / 2 + 5; // Shift down by 5 pixels
 
             // Increase the canvas size to avoid clipping the hexagons
-            canvas.width = horizontalSpacing * N + offsetX + hexWidth;
-            canvas.height = verticalSpacing * N + offsetY + hexHeight;
+            canvas.width = horizontalSpacing * N + offsetX + 5;
+            canvas.height = verticalSpacing * N + offsetY + 5;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -153,6 +153,9 @@ function getWebviewContent() {
                     hexPositions.push({ x, y, row, col });
                 }
             }
+
+            // Adjust the container height to match the canvas height
+            document.getElementById('hexgrid').style.height = canvas.height + 'px';
         }
 
         function drawHexagon(ctx, x, y, size, color = 'black') {
@@ -225,9 +228,18 @@ function getWebviewContent() {
             const j = parseInt(document.getElementById('coordJ').value);
             drawCat(ctx, i, j);
         });
+
+        function adjustHexgridHeight() {
+            const canvas = document.getElementById('hexCanvas');
+            const hexgrid = document.getElementById('hexgrid');
+            hexgrid.style.height = Math.min(window.innerHeight - 50, canvas.height) + 'px';
+        }
+
+        window.addEventListener('resize', adjustHexgridHeight);
     </script>
 </body>
 </html>
+
     
 	
     `;
