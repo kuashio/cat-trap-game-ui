@@ -44,7 +44,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 function getWebviewContent() {
     return `
-	<!DOCTYPE html>
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -107,8 +108,24 @@ function getWebviewContent() {
         <input type="checkbox" id="editMode" />
         <label for="editMode">Edit Mode</label>
     </div>
+    <div class="control">
+        <label for="coordI">Row (i):</label>
+        <input type="number" id="coordI" value="0" />
+    </div>
+    <div class="control">
+        <label for="coordJ">Column (j):</label>
+        <input type="number" id="coordJ" value="0" />
+    </div>
+    <div class="control">
+        <button id="paintTile">Paint a Tile</button>
+    </div>
+    <div class="control">
+        <button id="drawCat">Draw a Cat</button>
+    </div>
     <script>
         const vscode = acquireVsCodeApi();
+
+        let hexPositions = [];
 
         function drawHexGrid(canvas, N) {
             const ctx = canvas.getContext('2d');
@@ -126,16 +143,19 @@ function getWebviewContent() {
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            hexPositions = [];
+
             for (let row = 0; row < N; row++) {
                 for (let col = 0; col < N; col++) {
                     const x = offsetX + col * horizontalSpacing + (row % 2) * (horizontalSpacing / 2);
                     const y = offsetY + row * verticalSpacing;
                     drawHexagon(ctx, x, y, hexSize);
+                    hexPositions.push({ x, y, row, col });
                 }
             }
         }
 
-        function drawHexagon(ctx, x, y, size) {
+        function drawHexagon(ctx, x, y, size, color = 'black') {
             const sides = 6;
             ctx.beginPath();
             for (let i = 0; i < sides; i++) {
@@ -148,9 +168,40 @@ function getWebviewContent() {
                     ctx.lineTo(x_i, y_i);
                 }
             }
-            // Ensure the path is closed
             ctx.closePath();
+            ctx.strokeStyle = color;
             ctx.stroke();
+        }
+
+        function paintTile(ctx, row, col, size, color) {
+            const hex = hexPositions.find(h => h.row === row && h.col === col);
+            if (hex) {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = (Math.PI / 3) * i + Math.PI / 6;
+                    const x_i = hex.x + size * Math.cos(angle);
+                    const y_i = hex.y + size * Math.sin(angle);
+                    if (i === 0) {
+                        ctx.moveTo(x_i, y_i);
+                    } else {
+                        ctx.lineTo(x_i, y_i);
+                    }
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        function drawCat(ctx, row, col) {
+            const hex = hexPositions.find(h => h.row === row && h.col === col);
+            if (hex) {
+                ctx.fillStyle = 'orange';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('😺', hex.x, hex.y);
+            }
         }
 
         document.getElementById('startGame').addEventListener('click', () => {
@@ -158,10 +209,26 @@ function getWebviewContent() {
             const canvas = document.getElementById('hexCanvas');
             drawHexGrid(canvas, gridSize);
         });
+
+        document.getElementById('paintTile').addEventListener('click', () => {
+            const canvas = document.getElementById('hexCanvas');
+            const ctx = canvas.getContext('2d');
+            const i = parseInt(document.getElementById('coordI').value);
+            const j = parseInt(document.getElementById('coordJ').value);
+            paintTile(ctx, i, j, 20, 'blue');
+        });
+
+        document.getElementById('drawCat').addEventListener('click', () => {
+            const canvas = document.getElementById('hexCanvas');
+            const ctx = canvas.getContext('2d');
+            const i = parseInt(document.getElementById('coordI').value);
+            const j = parseInt(document.getElementById('coordJ').value);
+            drawCat(ctx, i, j);
+        });
     </script>
 </body>
 </html>
-
-
+    
+	
     `;
 }
