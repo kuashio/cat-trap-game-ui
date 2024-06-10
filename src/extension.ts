@@ -235,11 +235,34 @@ function getWebviewContent() {
             hexgrid.style.height = Math.min(window.innerHeight - 50, canvas.height) + 'px';
         }
 
+        function getTileCoordinates(x, y) {
+            const hexSize = 20; // Should be same as in drawHexGrid
+            for (const hex of hexPositions) {
+                const dx = x - hex.x;
+                const dy = y - hex.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < hexSize) {
+                    return { row: hex.row, col: hex.col };
+                }
+            }
+            return null;
+        }
+
+        document.getElementById('hexCanvas').addEventListener('click', (event) => {
+            const rect = event.target.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            const coords = getTileCoordinates(x, y);
+            if (coords) {
+                document.getElementById('coordI').value = coords.row;
+                document.getElementById('coordJ').value = coords.col;
+            }
+        });
+
         window.addEventListener('resize', adjustHexgridHeight);
     </script>
 </body>
 </html>
-
     
 	
     `;
