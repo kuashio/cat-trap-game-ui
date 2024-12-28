@@ -9,6 +9,9 @@ out/
 src/**/*.js
 src/**/*.js.map
 
+# Exception for webview.js
+!src/webview.js
+
 # VSCode settings
 .vscode-test.mjs
 .vscode-test/
