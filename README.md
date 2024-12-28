@@ -1,71 +1,69 @@
-# cat-trap-game-ui README
+# Cat Trap VSCode Extension
 
-This is the README for your extension "cat-trap-game-ui". After writing up a brief description, we recommend including the following sections.
+## Overview
+This is a VSCode extension for the GUI used in the LinkedIn Learning Course **AI Algorithms for Game Design with Python**, by Eduardo Corpeño.
+The Cat Trap VSCode Extension brings a fully interactive hexagonal grid game directly into your Visual Studio Code environment. Play the classic *Cat Trap* game with various strategies and customizable settings, all while visualizing the gameplay within your editor.
 
 ## Features
+- **Interactive Hexgrid**: A responsive hexagonal grid for the cat to navigate.
+- **Customizable Board**: Adjust the grid size to your preference.
+- **Cat Movement Strategies**:
+  - Random Cat
+  - Minimax
+  - Limited Depth
+  - Iterative Deepening
+- **Advanced Settings**:
+  - Deadline configuration in seconds.
+  - Alpha-Beta Pruning toggle for optimized search.
+- **Edit Mode**: Place or remove obstacles or the cat directly on the grid.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+## How to Use
+1. **Run your Server (main.py) and Start the Extension**
+   - Run your server application in main.py.
+   - Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`).
+   - Run `Start Cat Trap Game`.
+2. **Start a New Game**:
+   - Click the "Start New Game" button.
+   - Set the grid size using the **Hexgrid Size** input.
+3. **Select a Strategy**:
+   - Choose from the available strategies:
+     - Random Cat
+     - Minimax
+     - Limited Depth (Specify depth value)
+     - Iterative Deepening
+4. **Configure Settings**:
+   - Set the **Deadline** for cat moves in seconds.
+   - Toggle **Alpha-Beta Pruning** for enhanced performance.
+5. **Edit Mode**:
+   - Enable **Edit Mode** to place or remove obstacles or the cat on the grid.
 
-For example if there is an image subfolder under your extension project workspace:
+## Default Settings
+- **Hexgrid Size**: 7
+- **Deadline**: 5 seconds
+- **Strategy**: Iterative Deepening
+- **Limited Depth**: 4
+- **Alpha-Beta Pruning**: Enabled
+- **Edit Mode**: Disabled by default
 
-\!\[feature X\]\(images/feature-x.png\)
+## Installation
+1. Package the extension into a `.vsix` file using:
+   ```bash
+   vsce package
+   ```
+2. Install the extension in VSCode:
+   - Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`).
+   - Run `Extensions: Install from VSIX...`.
+   - Select the `.vsix` file.
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## Controls
+- **Mouse Clicks**: Interact with tiles to place or remove obstacles.
+- **UI Controls**:
+   - Start New Game
+   - Strategy selection
+   - Input settings for Deadline and Hexgrid Size
 
 ## Known Issues
+- None so far! Report any bugs or suggestions.
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+## License
+This extension is released under the [MIT License](LICENSE).

@@ -1,238 +1,246 @@
+// extension.ts: Updated logic to incorporate new layout, controls, and communication
 import * as vscode from 'vscode';
-import WebSocket from 'ws';
+import WebSocket from 'ws'; 
 
-let ws: WebSocket | undefined;
+let isWaiting = false; // Flag to track if waiting for the server's response
+let currentGrid: number[][] | null = null; // Store the grid sent from the webview
 
-export function activate(context: vscode.ExtensionContext) {
-    let disposable = vscode.commands.registerCommand('cat-trap-game-ui.start', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'hexgrid',
-            'Hexgrid',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true
+export function activate(context: vscode.ExtensionContext): void {
+    context.subscriptions.push(
+        vscode.commands.registerCommand('cat-trap-game-ui.start', () => {
+            const panel = vscode.window.createWebviewPanel(
+                'catTrapGame',
+                'Cat Trap Game',
+                vscode.ViewColumn.One,
+                { enableScripts: true, retainContextWhenHidden: true }
+            );
+            panel.onDidDispose(() => {
+                console.log("WebView closed. Resetting state.");
+                isWaiting = false;
+
+            }, null, context.subscriptions);
+            
+            panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
+
+            let socket: WebSocket | null = null;
+            function connectWebSocket() {
+                socket = new WebSocket('ws://localhost:8765');
+            
+                socket.onopen = () => {
+                    console.log('WebSocket connection established');
+                    isWaiting = false; // Reset the waiting flag
+                    panel.webview.postMessage({ command: 'serverStatus', status: 'connected' });
+            
+                    // Request grid from the server
+                    if (socket) {
+                        socket.send(JSON.stringify({ command: 'request_grid', grid: currentGrid || [] })); 
+                    }
+                };
+            
+                socket.onclose = () => {
+                    console.log('WebSocket connection closed. Reconnecting in 2 seconds...');
+                    panel.webview.postMessage({ command: 'serverStatus', status: 'disconnected' });
+                    setTimeout(connectWebSocket, 2000); // Retry connection
+                };
+            
+                socket.onerror = (error) => {
+                    console.error('WebSocket error:', error);                
+                };
+            
+                socket.onmessage = (event: WebSocket.MessageEvent) => {
+                    console.log('Message received from server:', event.data);
+                    const data = JSON.parse(event.data.toString());
+                    if (data.command === 'updateGrid') {
+                        // Use the grid provided by the server
+                        isWaiting = false; // Clear the waiting flag
+                        panel.webview.postMessage({ command: 'updateWaiting', isWaiting: false }); // Notify webview
+                        panel.webview.postMessage({ command: 'updateGrid', data: JSON.parse(data.data) });
+                    } else if (data.command === 'endgame') {
+                        const reason = data.reason;
+                        const message =
+                            reason === 2 ? 'The Cat Escaped! You Lose!' :
+                            reason === 1 ? 'The Cat is Trapped! You Win!' :
+                            'Time is Up for the Cat! You Win!';
+                        panel.webview.postMessage({ command: 'showEndgameMessage', message });
+                    }
+                };
             }
-        );
+            
+            const initialGameState = initializeLocalGame(7);
+            panel.webview.postMessage({ command: 'updateGrid', data: initialGameState.hexgrid });
 
-        panel.webview.html = getWebviewContent();
+            // Initialize WebSocket connection and start the game
+            connectWebSocket(); // Initiate connection
 
-        // Set up WebSocket communication
-        ws = new WebSocket('ws://localhost:8765');
-        
-        if (ws) {
-            ws.onmessage = function (event: WebSocket.MessageEvent) {
-                const message = JSON.parse(event.data as string);
-                if (message.command === 'updateGrid') {
-                    panel.webview.postMessage({ command: 'updateGrid', data: message.data });
-                } else if (message.command === 'gameStatus') {
-                    vscode.window.showInformationMessage(message.status);
-                }
-            };
+            panel.webview.onDidReceiveMessage(
+                (message) => {
+                    if (message.command === 'sendGrid') {
+                        currentGrid = message.grid; // Update the local grid
+                        console.log('Grid received from webview:', currentGrid);
+                    } else if (socket && socket.readyState === WebSocket.OPEN) {
+                        if (message.command === 'startGame') {
+                            socket.send(JSON.stringify({ command: 'new_game', size: message.size }));
+                        } else if (message.command === 'move') {
+                            if (!isWaiting) { // Only send if not already waiting
+                                isWaiting = true; // Set the waiting flag
+                                panel.webview.postMessage({ command: 'updateWaiting', isWaiting: true }); // Notify webview
+                                socket.send(JSON.stringify({
+                                    command: 'move',
+                                    clicked_tile: message.clickedTile,
+                                    deadline: message.deadline,
+                                    strategy: message.strategy,
+                                    depth: message.depth,
+                                    alpha_beta_pruning: message.alphaBetaPruning,
+                                    grid: message.grid // Add the current grid to the message
+                                }));
+                            } else {
+                                console.warn('Waiting for server response. Move not sent.');
+                            }
+                        } else if (message.command === 'edit') {
+                            if (!isWaiting) { // Only send if not already waiting
+                                socket.send(JSON.stringify({
+                                    command: 'edit',
+                                    action: message.action,
+                                    tile: message.tile,
+                                    grid: message.grid // Add the current grid to the message
+                                }));
+                            } else {
+                                console.warn('Waiting for server response. Edit not sent.');
+                            }
+                        }
+                    } else {
+                        console.warn('WebSocket not connected. Ignoring message:', message);
+                    }
+                },
+                undefined,
+                context.subscriptions
+            );
+        })
+    );
+}
+
+
+
+// Function to initialize the game locally
+function initializeLocalGame(size: number): { hexgrid: number[][] } {
+    const EMPTY_TILE = 0;
+    const BLOCK_TILE = 1;
+    const CAT_TILE = 6;
+
+    const hexgrid = Array.from({ length: size }, () => Array(size).fill(EMPTY_TILE));
+    hexgrid[Math.floor(size / 2)][Math.floor(size / 2)] = CAT_TILE;
+
+    const numBlocks = Math.floor(Math.random() * (0.13 * size * size - 0.067 * size * size) + 0.067 * size * size);
+    let count = 0;
+
+    while (count < numBlocks) {
+        const r = Math.floor(Math.random() * size);
+        const c = Math.floor(Math.random() * size);
+        if (hexgrid[r][c] === EMPTY_TILE) {
+            hexgrid[r][c] = BLOCK_TILE;
+            count++;
+        }
+    }
+    return { hexgrid };
+}
+
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview.js'));
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview.css'));
+
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="${styleUri}">
+        <title>Cat Trap Game</title>
+    </head>
+    <body>
+        <!-- Final layout structure -->
+        <div id="serverStatus" style="padding: 5px; font-size: 12px; color: green;">Connected</div>
+
+        <div id="controls">
+            <div id="top-row">
+                <div id="top-left" class="pane">
+                    <button id="startGame" title="Start a new game with the current settings">Start New Game</button>
+                    <label for="hexSize">Hexgrid Size: <input type="number" id="hexSize" min="1" max="999" value="7" title="Enter the number of rows and columns in the hexgrid. An odd number is recommended."></label>
+                </div>
+                <div id="top-right" class="pane">
+                    <label title="Enable Edit Mode to block/unblock tiles or move the cat"><input type="checkbox" id="editMode"> Edit Mode</label>
+                </div>
+            </div>
+
+            <div id="bottom-row">
+                <div id="bottom-left" class="pane">
+                    <fieldset>
+                        <legend>Cat Movement Strategies</legend>
+                        <label title="The cat will move randomly"><input type="radio" name="strategy" id="randomCat" value="random"> Random Cat</label>
+                        <label title="Use the Minimax algorithm to decide the cat's moves"><input type="radio" name="strategy" id="minimax" value="minimax"> Minimax</label>
+                        <label title="Limit the cat's search depth to the specified number">
+                            <input type="radio" name="strategy" id="limitedDepth" value="limited"> Limited Depth: <input type="number" id="depth" min="1" max="999" style="width: 3em;" value="4" title="Set the depth limit for the cat's search">
+                        </label>
+                        <label title="Use iterative deepening to optimize the cat's moves"><input type="radio" name="strategy" id="iterativeDeepening" value="iterative" checked > Iterative Deepening</label>
+                    </fieldset>
+                </div>
+                <div id="bottom-right" class="pane">
+                    <label for="deadline" title="Set the maximum time (in seconds) allowed for the cat to decide its move">Deadline in seconds: <input type="number" id="deadline" min="0.0" step="0.5" style="width: 4em;" value="5.0"></label>
+                    <br>
+                    <label title="Enable alpha-beta pruning to improve the efficiency of the cat's decision-making"><input type="checkbox" id="alphaBetaPruning" checked> Alpha-Beta Pruning</label>
+                </div>
+            </div>
+        </div>
+
+        <style>
+        /* Ensure all controls align properly with inline inputs and checkboxes */
+        #controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+            align-items: flex-start; /* Align everything to the top-left */
         }
 
-        panel.webview.onDidReceiveMessage(
-            (message: { command: string, size?: number, row?: number, col?: number }) => {
-                if (ws) {
-                    switch (message.command) {
-                        case 'startGame':
-                            ws.send(JSON.stringify({ command: 'startGame', size: message.size }));
-                            break;
-                        case 'blockTile':
-                            ws.send(JSON.stringify({ command: 'blockTile', row: message.row, col: message.col }));
-                            break;
-                    }
-                }
-            },
-            undefined,
-            context.subscriptions
-        );
-    });
+        #top-row, #bottom-row {
+            display: flex;
+            justify-content: flex-start;
+            gap: 20px;
+        }
 
-    context.subscriptions.push(disposable);
+        .pane {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            align-items: flex-start;
+        }
+
+        fieldset {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 0;
+        }
+
+        label {
+            display: flex;
+            align-items: center;
+            gap: 5px; /* Add spacing between label text and input */
+            margin-bottom: 3px; /* Reduce vertical spacing between radio buttons */
+        }
+
+        input[type="number"], input[type="checkbox"] {
+            margin: 0;
+        }
+
+        input[type="number"] {
+            width: 3em;
+        }
+        </style>
+        <canvas id="hexgrid"></canvas>
+        <script src="${scriptUri}"></script>
+    </body>
+    </html>`;
 }
 
-function getWebviewContent(): string {
-    return `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Cat Trap Game</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    padding: 20px;
-                }
-                #hexgrid {
-                    width: 100%;
-                    background-color: lightgrey;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    overflow: hidden; /* Ensure content doesn't overflow */
-                }
-                .control {
-                    margin-bottom: 10px;
-                }
-                canvas {
-                    border: none;
-                }
-            </style>
-        </head>
-        <body>
-            <div id="hexgrid">
-                <canvas id="hexCanvas"></canvas>
-            </div>
-            <div class="control">
-                <button id="startGame">Start New Game</button>
-            </div>
-            <div class="control">
-                <label for="gridSize">Enter an odd number for N:</label>
-                <input type="number" id="gridSize" value="7" />
-            </div>
-            <div class="control">
-                <label for="coordI">Row (i):</label>
-                <input type="number" id="coordI" value="0" />
-            </div>
-            <div class="control">
-                <label for="coordJ">Column (j):</label>
-                <input type="number" id="coordJ" value="0" />
-            </div>
-            <div class="control">
-                <button id="paintTile">Paint a Tile</button>
-            </div>
-            <div class="control">
-                <button id="drawCat">Draw a Cat</button>
-            </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-
-                let hexPositions = [];
-
-                function drawHexGrid(canvas, N, gridData) {
-                    const ctx = canvas.getContext('2d');
-                    const hexSize = 20;  // Size of each hexagon
-                    const hexWidth = Math.sqrt(3) * hexSize;
-                    const hexHeight = 2 * hexSize;
-                    const verticalSpacing = hexHeight * 0.75;
-                    const horizontalSpacing = hexWidth;
-                    const offsetX = hexWidth / 2 + 5;  // Shift right by 5 pixels
-                    const offsetY = hexHeight / 2 + 5; // Shift down by 5 pixels
-
-                    // Increase the canvas size to avoid clipping the hexagons
-                    canvas.width = horizontalSpacing * N + offsetX + 5;
-                    canvas.height = verticalSpacing * N + offsetY + 5;
-
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                    hexPositions = [];
-
-                    for (let row = 0; row < N; row++) {
-                        for (let col = 0; col < N; col++) {
-                            const x = offsetX + col * horizontalSpacing + (row % 2) * (horizontalSpacing / 2);
-                            const y = offsetY + row * verticalSpacing;
-                            const tile = gridData[row][col];
-                            drawHexagon(ctx, x, y, hexSize, tile);
-                            hexPositions.push({ x, y, row, col });
-                        }
-                    }
-
-                    // Adjust the container height to match the canvas height
-                    document.getElementById('hexgrid').style.height = canvas.height + 'px';
-                }
-
-                function drawHexagon(ctx, x, y, size, tile) {
-                    const sides = 6;
-                    ctx.beginPath();
-                    for (let i = 0; i < sides; i++) {
-                        const angle = (Math.PI / 3) * i + Math.PI / 6;  // Rotate by 30 degrees
-                        const x_i = x + size * Math.cos(angle);
-                        const y_i = y + size * Math.sin(angle);
-                        if (i === 0) {
-                            ctx.moveTo(x_i, y_i);
-                        } else {
-                            ctx.lineTo(x_i, y_i);
-                        }
-                    }
-                    ctx.closePath();
-                    ctx.strokeStyle = 'white';
-                    ctx.stroke();
-
-                    if (tile === 1) {
-                        ctx.fillStyle = '#787C7E'; // Blocked tile color
-                    } else if (tile === 6) {
-                        ctx.fillStyle = 'orange'; // Cat color
-                        ctx.font = '20px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText('😺', x, y);
-                        return;
-                    } else {
-                        ctx.fillStyle = '#85C0F9'; // Free tile color
-                    }
-                    ctx.fill();
-                }
-
-                function getTileCoordinates(x, y) {
-                    const hexSize = 20; // Should be same as in drawHexGrid
-                    for (const hex of hexPositions) {
-                        const dx = x - hex.x;
-                        const dy = y - hex.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        if (distance < hexSize) {
-                            return { row: hex.row, col: hex.col };
-                        }
-                    }
-                    return null;
-                }
-
-                document.getElementById('startGame').addEventListener('click', () => {
-                    const gridSize = parseInt(document.getElementById('gridSize').value);
-                    const canvas = document.getElementById('hexCanvas');
-                    vscode.postMessage({ command: 'startGame', size: gridSize });
-                });
-
-                document.getElementById('paintTile').addEventListener('click', () => {
-                    const canvas = document.getElementById('hexCanvas');
-                    const ctx = canvas.getContext('2d');
-                    const i = parseInt(document.getElementById('coordI').value);
-                    const j = parseInt(document.getElementById('coordJ').value);
-                    vscode.postMessage({ command: 'blockTile', row: i, col: j });
-                });
-
-                document.getElementById('hexCanvas').addEventListener('click', (event) => {
-                    const rect = event.target.getBoundingClientRect();
-                    const x = event.clientX - rect.left;
-                    const y = event.clientY - rect.top;
-                    const coords = getTileCoordinates(x, y);
-                    if (coords) {
-                        document.getElementById('coordI').value = coords.row;
-                        document.getElementById('coordJ').value = coords.col;
-                        vscode.postMessage({ command: 'blockTile', row: coords.row, col: coords.col });
-                    }
-                });
-
-                window.addEventListener('resize', adjustHexgridHeight);
-
-                function adjustHexgridHeight() {
-                    const canvas = document.getElementById('hexCanvas');
-                    const hexgrid = document.getElementById('hexgrid');
-                    hexgrid.style.height = Math.min(window.innerHeight - 50, canvas.height) + 'px';
-                }
-
-                window.addEventListener('message', event => {
-                    const message = event.data;
-                    if (message.command === 'updateGrid') {
-                        const canvas = document.getElementById('hexCanvas');
-                        const gridSize = parseInt(document.getElementById('gridSize').value);
-                        drawHexGrid(canvas, gridSize, JSON.parse(message.data));
-                    }
-                });
-            </script>
-        </body>
-        </html>`;
+export function deactivate(): void {
+    // No cleanup necessary
 }
-
-exports.activate = activate;

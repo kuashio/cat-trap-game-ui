@@ -1,18 +1,13 @@
 {
     "compilerOptions": {
-        "module": "Node16",
-        "target": "ES2022",
-        "lib": [
-            "ES2022"
-        ],
+        "module": "commonjs",
+        "target": "esnext",
+        "lib": ["esnext", "dom"],
         "sourceMap": true,
         "rootDir": "src",
-        "outDir": "out",
+        "outDir": "dist",
         "strict": true,
-        "esModuleInterop": true  /* Enable interoperability between CommonJS and ES Modules */
-        /* Additional Checks */
-        // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
-        // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
-        // "noUnusedParameters": true,  /* Report errors on unused parameters. */
-    }
+        "esModuleInterop": true
+    },
+    "exclude": []
 }
